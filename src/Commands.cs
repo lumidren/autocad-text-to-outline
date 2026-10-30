@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -22,7 +22,7 @@ namespace TextOutline
         {
             Document doc = AcApp.DocumentManager.MdiActiveDocument;
             if (doc != null)
-                doc.Editor.WriteMessage("\nText to Outline loaded. Type TEXTOUTLINE (or TXO) and select text.\n");
+                doc.Editor.WriteMessage("\nText to Outline loaded. Type TEXTOUTLINE (or TX) and select text.\n");
         }
 
         public void Terminate() { }
@@ -35,10 +35,10 @@ namespace TextOutline
         [CommandMethod("TEXTOUTLINE", CommandFlags.Modal | CommandFlags.UsePickSet | CommandFlags.Redraw)]
         public void TextOutlineCommand() { Run(); }
 
-        [CommandMethod("TXO", CommandFlags.Modal | CommandFlags.UsePickSet | CommandFlags.Redraw)]
+        [CommandMethod("TX", CommandFlags.Modal | CommandFlags.UsePickSet | CommandFlags.Redraw)]
         public void TxoCommand() { Run(); }
 
-        [CommandMethod("TXOQUALITY", CommandFlags.Modal)]
+        [CommandMethod("TXQUALITY", CommandFlags.Modal)]
         public void QualityCommand()
         {
             Editor ed = AcApp.DocumentManager.MdiActiveDocument.Editor;

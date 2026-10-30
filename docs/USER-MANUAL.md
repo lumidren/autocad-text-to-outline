@@ -1,4 +1,4 @@
-# Text to Outline for AutoCAD 2020 — User Manual
+﻿# Text to Outline for AutoCAD 2020 — User Manual
 
 This plugin turns AutoCAD **TEXT** and **MTEXT** into **closed polylines that trace the outer edges of the letters**.
 It does in one command what you would otherwise do by hand:
@@ -14,7 +14,12 @@ The result is one closed polyline for each outer edge and one for each hole
 (the inside of **o, a, e, A, B, R, 8, @**…). It works with any TrueType font, any text height,
 rotation, width factor, oblique (slant) angle, justification, and mirrored or upside-down text.
 
-![Example result: blue = outer edges, red = holes](outline-test.png)
+![Before and after TX](before-after.png)
+
+![Exploded text vs. TX result](manual-vs-plugin.png)
+
+> **Quick reference:** `NETLOAD` the DLL once per session → type **`TX`** → select text → **Enter** →
+> answer *Delete original text? [Yes/No]*. Use `TXQUALITY` to change curve smoothness and `U` to undo.
 
 ---
 
@@ -75,7 +80,7 @@ Express Tools are **not** needed.
    *(This dialog does not appear if you added the folder to Trusted Locations.)*
 5. The command line shows:
    ```
-   Text to Outline loaded. Type TEXTOUTLINE (or TXO) and select text.
+   Text to Outline loaded. Type TEXTOUTLINE (or TX) and select text.
    ```
 
 The plugin stays loaded until you close AutoCAD. With this method you need to `NETLOAD` it again
@@ -108,10 +113,10 @@ Use the `acaddoc.lsp` file, which AutoCAD runs every time it opens a drawing.
 
 1. Make sure the text uses a **TrueType font** (see [section 9](#9-what-the-plugin-cannot-convert)).
    In the **STYLE** dialog, TrueType fonts have a **TT** icon (Arial, Times New Roman, Calibri, Segoe Script…).
-2. Type **`TEXTOUTLINE`** (or the short alias **`TXO`**) and press **Enter**.
+2. Type **`TEXTOUTLINE`** (or the short alias **`TX`**) and press **Enter**.
 3. **Select the text.** You can pick single TEXT and MTEXT objects, use a window, or type `ALL`.
    Other object types are ignored automatically. Press **Enter** when done.
-   *(You can also select the text first and then type `TXO`.)*
+   *(You can also select the text first and then type `TX`.)*
 4. The command asks:
    ```
    Delete original text? [Yes/No] <No>:
@@ -127,10 +132,19 @@ Use the `acaddoc.lsp` file, which AutoCAD runs every time it opens a drawing.
 
 **Undo:** one **`U`** removes everything the command created and restores any deleted text.
 
+**The whole session on the command line:**
+```
+Command: TX
+Select text to convert to outline polylines: Specify opposite corner: 3 found
+Select text to convert to outline polylines:
+Delete original text? [Yes/No] <No>: Y
+Created 24 outline polyline(s) from 3 text object(s).
+```
+
 ### Example
 
 1. Type `TEXT`, pick a point, height `50`, rotation `0`, type `Hello` and press Enter twice.
-2. Type `TXO`, pick the text, press Enter, then press Enter again (keep the text).
+2. Type `TX`, pick the text, press Enter, then press Enter again (keep the text).
 3. Move the text away (`MOVE`) to see the outlines underneath: 5 outer outlines (H, e, l, l, o)
    and 2 hole outlines (inside e and o), each one a closed polyline.
 
@@ -141,10 +155,10 @@ Use the `acaddoc.lsp` file, which AutoCAD runs every time it opens a drawing.
 | Command | What it does |
 |---|---|
 | **`TEXTOUTLINE`** | Converts selected TEXT/MTEXT into closed outline polylines. |
-| **`TXO`** | Short alias for `TEXTOUTLINE`. |
-| **`TXOQUALITY`** | Sets how smooth curved letters are: **Draft**, **Normal** (default) or **Fine**. |
+| **`TX`** | Short alias for `TEXTOUTLINE`. |
+| **`TXQUALITY`** | Sets how smooth curved letters are: **Draft**, **Normal** (default) or **Fine**. |
 
-### TXOQUALITY — curve smoothness
+### TXQUALITY — curve smoothness
 
 Curved letter edges (o, s, c…) are made of many short straight segments.
 
@@ -176,13 +190,13 @@ The setting lasts until AutoCAD is closed.
 
 - **Filled letters:** run `HATCH`, choose a SOLID pattern, and pick inside each letter, or select the
   outlines with **Select objects**. Holes stay empty because they are separate closed boundaries.
-- **CNC, laser, plasma, vinyl cutting:** use **TXOQUALITY → Fine** for large text. All outlines are
+- **CNC, laser, plasma, vinyl cutting:** use **TXQUALITY → Fine** for large text. All outlines are
   closed, which most CAM software requires.
 - **Offset outlines** (for a border or tool path): `OFFSET` works directly on the result polylines.
 - **Extruded 3D letters:** `EXTRUDE` the outer polylines, then `SUBTRACT` the extruded holes.
-- **Converting many texts at once:** type `TXO`, then `ALL` at the selection prompt.
+- **Converting many texts at once:** type `TX`, then `ALL` at the selection prompt.
 - **Change the font first:** if your text uses an SHX font, change its text style to a TrueType font
-  (`STYLE` command), then run `TXO`.
+  (`STYLE` command), then run `TX`.
 
 ---
 
@@ -191,7 +205,7 @@ The setting lasts until AutoCAD is closed.
 | Not supported | Why / what to do |
 |---|---|
 | **SHX fonts** (txt.shx, simplex.shx, romans.shx, isocp.shx…) | SHX letters are single lines with no thickness, so there is no outer edge to trace. Change the text style to a TrueType font first. The command lists the skipped SHX fonts on the command line. |
-| Text inside **blocks** | `EXPLODE` the block (or edit it with `BEDIT`/`REFEDIT`), then run `TXO`. |
+| Text inside **blocks** | `EXPLODE` the block (or edit it with `BEDIT`/`REFEDIT`), then run `TX`. |
 | **Attributes**, dimension text, table text, leader text | Explode them to plain TEXT/MTEXT first (`BURST` from Express Tools converts attributes to text). |
 | Text that uses a font **not installed** on this computer | Install the font, or change the text style to an installed font. |
 | **AutoCAD LT** | LT cannot load plugins. |
@@ -203,12 +217,13 @@ The setting lasts until AutoCAD is closed.
 | Problem | Solution |
 |---|---|
 | `NETLOAD` does nothing / *"Cannot load assembly"* / *"Operation is not supported"* | The DLL is blocked by Windows. Unblock it ([section 2](#2-installing-the-plugin), step 3) and restart AutoCAD. |
-| *"Unknown command TXO"* | The plugin is not loaded in this AutoCAD session. Run `NETLOAD` again or set up auto-loading ([section 4](#4-loading-it-automatically-every-time-autocad-starts)). |
+| *"Unknown command TX"* | The plugin is not loaded in this AutoCAD session. Run `NETLOAD` again or set up auto-loading ([section 4](#4-loading-it-automatically-every-time-autocad-starts)). |
+| `TX` starts a different command | Another alias or plugin on this PC already uses `TX` (for example in `acad.pgp`). Use the full name **`TEXTOUTLINE`** instead. |
 | Security warning every time it loads | Add the plugin folder to **Trusted Locations** ([section 2](#2-installing-the-plugin), step 4). |
 | *"Skipped N text(s) using SHX fonts"* | That text uses a single-stroke SHX font. Change its style to a TrueType font. |
 | *"Created 0 outline polyline(s)"* | The selection contained only empty text, or only SHX text. |
 | *"…proportions differ from the text by more than 3%"* | The outline may not line up exactly with that text. Please report it with the font name, height and width factor (see below). |
-| Curves look faceted on very large text | `TXOQUALITY` → `Fine`, then convert again. |
+| Curves look faceted on very large text | `TXQUALITY` → `Fine`, then convert again. |
 | A different font shape than expected | AutoCAD shows a substitute when a font is missing. Install the real font so the outline matches. |
 
 **Reporting a problem:** please include your AutoCAD version, the font name, the text height,
@@ -246,7 +261,7 @@ The new DLL is written to `bin\TextOutline.dll`.
 
 1. Each TEXT (and each line of an exploded MTEXT) is read with its text style's TrueType font, bold and italic settings.
 2. The letter outlines are read from the font with GDI+ (`GraphicsPath.AddString`) and curves are
-   flattened to short line segments (`TXOQUALITY`).
+   flattened to short line segments (`TXQUALITY`).
 3. Contours are classified as **solid** or **hole** from their winding direction. The largest
    contour is always an outer one, so its direction defines "solid".
 4. The contours are merged with AutoCAD **regions**, largest first: solids are united and holes are subtracted.
