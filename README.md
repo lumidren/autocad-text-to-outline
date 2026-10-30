@@ -49,8 +49,24 @@ parts, which gives one closed polyline per edge:
 
 ### Step 1 — Download the plugin
 
-1. Open [`bin/TextOutline.dll`](bin/TextOutline.dll) in this repository.
-2. Click the **Download raw file** button (⬇ icon, top right of the file view).
+**👉 [Download TextOutline.dll](https://github.com/lumidren/autocad-text-to-outline/raw/main/bin/TextOutline.dll)** (click it and the download starts)
+
+If the link doesn't start a download, use one of these instead:
+
+- **From the file page:** open [`bin/TextOutline.dll`](bin/TextOutline.dll) → click the **⬇ Download raw file** button
+  at the top right of the file view.
+- **Whole project as a ZIP:** on the [repository main page](https://github.com/lumidren/autocad-text-to-outline)
+  click the green **`<> Code`** button → **Download ZIP** → right-click the ZIP → **Extract All…**.
+  The plugin is in the `bin` folder. If you use the ZIP, **unblock the ZIP before extracting it** (Step 3),
+  so all files inside are unblocked too.
+
+> **Browser warning?** Browsers often warn about `.dll` files ("TextOutline.dll isn't commonly downloaded").
+> In **Edge**: open Downloads (**Ctrl+J**) → hover the file → **⋯** → **Keep** → **Show more** → **Keep anyway**.
+> In **Chrome**: open Downloads (**Ctrl+J**) → **Keep** / **Download suspicious file**.
+>
+> The file is the plugin built from the source code in this repository's `src` folder.
+
+The file goes to your **Downloads** folder.
 
 ### Step 2 — Put it in a folder
 

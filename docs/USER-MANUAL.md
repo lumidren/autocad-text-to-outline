@@ -53,6 +53,17 @@ Express Tools are **not** needed.
 
 ## 2. Installing the plugin
 
+**Download** the plugin first:
+- Direct download: <https://github.com/lumidren/autocad-text-to-outline/raw/main/bin/TextOutline.dll>
+- Or open [`bin/TextOutline.dll`](../bin/TextOutline.dll) on GitHub → **⬇ Download raw file** (top right).
+- Or the whole project: green **`<> Code`** button on the repository page → **Download ZIP**
+  (unblock the ZIP *before* extracting it, see step 3 below).
+
+If the browser warns that the `.dll` "isn't commonly downloaded", open its Downloads list (**Ctrl+J**)
+and choose **Keep** / **Keep anyway**.
+
+Then install it:
+
 1. Create a folder for the plugin, for example:
    ```
    C:\AutoCAD Plugins\TextOutline
