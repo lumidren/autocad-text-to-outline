@@ -41,7 +41,8 @@ rotation, width factor, oblique (slant) angle, justification, and mirrored or up
 9. [What the plugin cannot convert](#9-what-the-plugin-cannot-convert)
 10. [Troubleshooting](#10-troubleshooting)
 11. [Uninstalling](#11-uninstalling)
-12. [Building the DLL yourself](#12-building-the-dll-yourself)
+12. [Text in point clouds (TXSCAN)](#12-text-in-point-clouds-txscan)
+13. [Building the DLL yourself](#13-building-the-dll-yourself)
 
 ---
 
@@ -280,7 +281,31 @@ Outlines you already created are normal polylines and stay in your drawings.
 
 ---
 
-## 12. Building the DLL yourself
+## 12. Text in point clouds (TXSCAN)
+
+`TXSCAN` turns lettering that exists only as scan points into polylines in the matching font. Use it for
+painted markings, signs, and engraved or raised plates.
+
+1. Look at the surface straight on (`PLAN`, or a view facing it), with **perspective off**. Zoom so the text fills
+   a good part of the screen.
+2. Make the letters stand out. Colour the point cloud by **intensity** or true colour for painted text, or by
+   **elevation** with a narrow range around the surface for engraved or raised text.
+3. Type **`TXSCAN`** and draw a window around **one line** of text, with a little space around it.
+4. A dialog shows the letters found (straightened) and the text Windows read. Correct the text if needed and
+   click **Match fonts**.
+5. The five closest fonts are listed with a score. They come from all TrueType fonts in Windows and all SHX fonts
+   AutoCAD can find. Click one to preview it over the scan: black = agree, grey = scan only, red = font only.
+6. Click **Draw polylines**. A text style named `TXSCAN <font>` is created. The text is placed exactly over the
+   scanned letters and exploded like `TX`. Tick **Keep the text object as well** to keep the TEXT too.
+
+Limits: only fonts installed on this PC can be found, so a missing font gives the closest look-alike. Some
+fonts share letter shapes and score alike. Use one straight line of text at a time. Reading the text needs
+Windows 10/11 text recognition for your language. Without it, type the text yourself. If no letters are
+found, `TXSCAN` saves what it saw to `%TEMP%\TextOutline\`.
+
+---
+
+## 13. Building the DLL yourself
 
 You only need this if you change the source code. No Visual Studio is required.
 
