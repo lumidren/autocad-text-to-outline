@@ -247,7 +247,7 @@ namespace TextOutline
         }
 
         // Extents of the text measured in its own (unrotated) coordinate system.
-        static Extents3d LocalExtents(DBText txt, Matrix3d toWorld, BlockTableRecord space, Transaction tr)
+        internal static Extents3d LocalExtents(DBText txt, Matrix3d toWorld, BlockTableRecord space, Transaction tr)
         {
             DBText probe = (DBText)txt.Clone();
             probe.TransformBy(toWorld.Inverse());
