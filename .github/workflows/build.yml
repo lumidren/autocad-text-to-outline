@@ -1,0 +1,71 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: SHX font reader tests
+        shell: cmd
+        run: |
+          mkdir out
+          "%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /warn:4 /platform:x64 /out:out\ShxTest.exe src\ShxFont.cs test\ShxTest.cs || exit /b 1
+          out\ShxTest.exe
+
+      - name: Build plugin for AutoCAD 2019-2024, 2025-2026 and 2027+
+        run: dotnet build TextOutline.csproj -c Release
+
+      - name: Collect DLLs
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item bin\x64\Release\net48\TextOutline.dll dist\TextOutline.dll
+          Copy-Item bin\x64\Release\net8.0-windows\TextOutline.dll dist\TextOutline-AutoCAD-2025-2026.dll
+          Copy-Item bin\x64\Release\net10.0-windows\TextOutline.dll dist\TextOutline-AutoCAD-2027.dll
+          Get-ChildItem dist | ForEach-Object { '{0,8}  {1}' -f $_.Length, $_.Name }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: TextOutline
+          path: dist/*.dll
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: TextOutline
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l
+          gh release create "$GITHUB_REF_NAME" TextOutline.dll TextOutline-AutoCAD-2025-2026.dll TextOutline-AutoCAD-2027.dll \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Text to Outline $GITHUB_REF_NAME" \
+            --notes "Converts TEXT and MTEXT to polylines using each text's own style: TrueType fonts become closed outlines, SHX fonts (txt, romans, simplex...) are exploded into polylines along the letter strokes.
+
+          | Your AutoCAD | Download |
+          |---|---|
+          | 2019 - 2024 (incl. 2020) | **TextOutline.dll** |
+          | 2025 - 2026 | **TextOutline-AutoCAD-2025-2026.dll** |
+          | 2027 and newer | **TextOutline-AutoCAD-2027.dll** |
+
+          Right-click the file > Properties > Unblock, then load it in AutoCAD with NETLOAD and type TX."
