@@ -68,6 +68,8 @@ jobs:
             --title "Text to Outline $GITHUB_REF_NAME" \
             --notes "Converts TEXT and MTEXT to polylines using each text's own style: TrueType fonts become closed outlines, SHX fonts (txt, romans, simplex...) are exploded into polylines along the letter strokes.
 
+          TXSCAN reads text in point clouds: draw a window around the letters, pick one of the five closest fonts, and it draws the text as polylines over the scan.
+
           | Your AutoCAD | Download |
           |---|---|
           | 2019 - 2024 (incl. 2020) | **TextOutline.dll** |
