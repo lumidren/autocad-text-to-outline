@@ -108,7 +108,9 @@ static class ScanTest
             {
                 g.Clear(Color.White);
                 g.SmoothingMode = SmoothingMode.AntiAlias;
-                p.AddString(text, family, (int)style, 90, new PointF(0, 0), StringFormat.GenericTypographic);
+                // Real letters keep the font's exact spacing: lay out large, then scale to 90 px.
+                p.AddString(text, family, (int)style, 2000, new PointF(0, 0), StringFormat.GenericTypographic);
+                using (Matrix down = new Matrix(0.045f, 0, 0, 0.045f, 0, 0)) p.Transform(down);
                 RectangleF b = p.GetBounds();
                 g.TranslateTransform(W / 2f, H / 2f);
                 g.RotateTransform(-(float)angle);                 // screen y is down: negative = anticlockwise
