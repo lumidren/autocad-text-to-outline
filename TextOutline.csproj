@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    TextOutline: one project, three builds.
+
+      net48            AutoCAD 2019-2024  (API package AutoCAD.NET 23.0.0)
+      net8.0-windows   AutoCAD 2025-2026  (API package AutoCAD.NET 25.0.1)
+      net10.0-windows  AutoCAD 2027+      (API package AutoCAD.NET 26.0.0)
+
+    Build all three (needs the .NET 10 SDK, no AutoCAD install):
+      dotnet build TextOutline.csproj -c Release
+    Output: bin\x64\Release\<target>\TextOutline.dll
+
+    The AutoCAD assemblies come from Autodesk's official NuGet packages and are used for
+    compiling only. Without the SDK, build.bat builds the net48 DLL against a local AutoCAD.
+  -->
+
+  <PropertyGroup>
+    <TargetFrameworks>net48;net8.0-windows;net10.0-windows</TargetFrameworks>
+    <OutputType>Library</OutputType>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <Platform Condition="'$(Platform)' == '' Or '$(Platform)' == 'AnyCPU'">x64</Platform>
+    <AssemblyName>TextOutline</AssemblyName>
+    <RootNamespace>TextOutline</RootNamespace>
+    <Version>1.1.0</Version>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- GDI+ (System.Drawing) for TrueType outlines; the AutoCAD API also references WPF types. -->
+    <UseWPF Condition="'$(TargetFramework)' != 'net48'">true</UseWPF>
+    <UseWindowsForms Condition="'$(TargetFramework)' != 'net48'">true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="src\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <PackageReference Include="AutoCAD.NET" Version="23.0.0" ExcludeAssets="runtime" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="System.Xaml" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+    <PackageReference Include="AutoCAD.NET" Version="25.0.1" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+    <PackageReference Include="AutoCAD.NET" Version="26.0.0" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+</Project>
