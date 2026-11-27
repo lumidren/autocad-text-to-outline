@@ -23,7 +23,7 @@
     <Platform Condition="'$(Platform)' == '' Or '$(Platform)' == 'AnyCPU'">x64</Platform>
     <AssemblyName>TextOutline</AssemblyName>
     <RootNamespace>TextOutline</RootNamespace>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
