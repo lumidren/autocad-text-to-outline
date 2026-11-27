@@ -23,6 +23,34 @@ namespace TextOutline
                 return n > 2 && Math.Abs(X[0] - X[n - 1]) < 1e-9 && Math.Abs(Y[0] - Y[n - 1]) < 1e-9;
             }
         }
+
+        // Copy with every bulge segment replaced by straight pieces, perQuarter per 90 degrees.
+        // Needed when the text is stretched or slanted: an arc then becomes part of an ellipse.
+        public ShxStroke Flatten(int perQuarter)
+        {
+            ShxStroke r = new ShxStroke();
+            for (int i = 0; i < Count; i++)
+            {
+                r.X.Add(X[i]); r.Y.Add(Y[i]); r.Bulge.Add(0);
+                if (i + 1 >= Count || Bulge[i] == 0) continue;
+
+                double x0 = X[i], y0 = Y[i], x1 = X[i + 1], y1 = Y[i + 1];
+                double dx = x1 - x0, dy = y1 - y0, c = Math.Sqrt((dx * dx) + (dy * dy));
+                if (c < 1e-12) continue;
+                double theta = 4 * Math.Atan(Bulge[i]);                 // included angle, negative = clockwise
+                double rad = c / (2 * Math.Sin(theta / 2));             // signed like theta
+                double h = rad * Math.Cos(theta / 2);                   // centre's distance from the chord
+                double cx = ((x0 + x1) / 2) - (dy / c * h), cy = ((y0 + y1) / 2) + (dx / c * h);
+                double a0 = Math.Atan2(y0 - cy, x0 - cx), r0 = Math.Abs(rad);
+                int pieces = Math.Max(2, (int)Math.Ceiling((Math.Abs(theta) / (Math.PI / 2) * perQuarter) - 1e-9));
+                for (int k = 1; k < pieces; k++)
+                {
+                    double a = a0 + (theta * k / pieces);
+                    r.X.Add(cx + (r0 * Math.Cos(a))); r.Y.Add(cy + (r0 * Math.Sin(a))); r.Bulge.Add(0);
+                }
+            }
+            return r;
+        }
     }
 
     // Reads compiled AutoCAD shape fonts (.shx): "shapes 1.0/1.1" and "unifont 1.0" files.
@@ -170,7 +198,17 @@ namespace TextOutline
 
         // ------------------------------------------------------------------ characters
 
-        static readonly Encoding Ansi = Encoding.GetEncoding(1252);
+        static readonly Encoding Ansi = MakeAnsi();
+
+        // Windows-1252 for non-Unicode SHX fonts. .NET 8+ only has it once a code-page provider is
+        // registered, so fall back to Latin-1, which matches it except for 0x80-0x9F.
+        static Encoding MakeAnsi()
+        {
+            try { return Encoding.GetEncoding(1252); }
+            catch (Exception) { }
+            try { return Encoding.GetEncoding(28591); }
+            catch (Exception) { return Encoding.ASCII; }
+        }
 
         // Shape number for a character, or -1 if the font has no shape for it.
         public int ShapeFor(char c)

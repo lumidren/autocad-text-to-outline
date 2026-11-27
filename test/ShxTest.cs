@@ -90,6 +90,25 @@ static class ShxTest
 
         double a;
         int m;
+
+        // Flattening (used for stretched or slanted text): points stay on the arc, on the right side.
+        ShxStroke half = f.RenderShape('(', out a)[0].Flatten(4);
+        bool onArc = half.Count == 9 && Near(half.X[4], 5) && Near(half.Y[4], 5) && Near(half.X[8], 0) && Near(half.Y[8], 10);
+        for (int i = 0; i < half.Count; i++) onArc &= Near(Math.Sqrt(Sq(half.X[i]) + Sq(half.Y[i] - 5)), 5) && half.Bulge[i] == 0;
+        Check("flattened half circle: 8 pieces on the circle, bulging east", onArc);
+
+        ShxStroke ring = f.RenderShape('O', out a)[0].Flatten(8);
+        bool onRing = ring.Count == 33 && ring.IsClosed;
+        for (int i = 0; i < ring.Count; i++) onRing &= Near(Math.Sqrt(Sq(ring.X[i] - 3) + Sq(ring.Y[i] - 5)), 3);
+        Check("flattened circle stays closed and round", onRing);
+
+        ShxStroke dip = f.RenderShape('B', out a)[0].Flatten(16);
+        double top = 0;
+        for (int i = 0; i < dip.Count - 1; i++) top = Math.Max(top, dip.Y[i]);   // the arc, without the final straight piece
+        double sagitta = (64 / 127.0) * 4 / 2;
+        Check("flattened clockwise bulge rises to its sagitta", top > 0.99 * sagitta && top <= sagitta + 1e-9
+              && Near(dip.X[dip.Count - 2], 4) && Near(dip.Y[dip.Count - 2], 0) && Near(dip.Y[dip.Count - 1], 4));
+
         Check("accented letter through code page 1252", f.Render("é", out a, out m).Count == 1 && m == 0);
         Check("unifont glyph above U+00FF", u.Render("Ж", out a, out m).Count == 1 && m == 0);
 
@@ -110,7 +129,7 @@ static class ShxTest
         Dictionary<int, byte[]> d = new Dictionary<int, byte[]>();
         d['L'] = B(2, 0xA4, 1, 0xAC, 0x60, 2, 0x20, 0);                  // up 10 (pen up), down 10, east 6, gap 2
         d['O'] = B(2, 8, 6, 5, 1, 10, 3, 0x00, 2, 8, 5, -5, 0);          // full circle r 3 around (3,5)
-        d['('] = B(12, 0, 10, 127, 0);                                     // half circle bulging west
+        d['('] = B(12, 0, 10, 127, 0);                                     // half circle, counter-clockwise: bulges east
         d['B'] = B(13, 4, 0, -64, 0, 4, 0, 0, 0, 0);                       // bulge arc then straight piece
         d['X'] = unifont ? B(7, 0, 'L', 0) : B(7, 'L', 0);                 // subshape
         d['|'] = B(14, 0x24, 0x30, 0);                                     // vertical-only vector, then east 3
