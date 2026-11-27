@@ -63,9 +63,19 @@ namespace TextOutline
             Editor ed = doc.Editor;
 
             PromptSelectionOptions pso = new PromptSelectionOptions();
-            pso.MessageForAdding = "\nSelect text to convert to outline polylines: ";
+            pso.MessageForAdding = "\nSelect text to convert to polylines [Enter = all text]: ";
             SelectionFilter filter = new SelectionFilter(new TypedValue[] { new TypedValue((int)DxfCode.Start, "TEXT,MTEXT") });
             PromptSelectionResult psr = ed.GetSelection(pso, filter);
+            if (psr.Status == PromptStatus.Error || psr.Status == PromptStatus.None)
+            {
+                // Enter on an empty selection: take every TEXT and MTEXT in the current space.
+                psr = ed.SelectAll(filter);
+                if (psr.Status != PromptStatus.OK)
+                {
+                    ed.WriteMessage("\nNo text found.\n");
+                    return;
+                }
+            }
             if (psr.Status != PromptStatus.OK) return;
 
             PromptKeywordOptions pko = new PromptKeywordOptions("\nDelete original text?");
@@ -113,10 +123,13 @@ namespace TextOutline
                 tr.Commit();
             }
 
-            ed.WriteMessage("\nCreated {0} outline polyline(s) from {1} text object(s).", report.Polylines, report.Texts);
-            if (report.ShxSkipped > 0)
-                ed.WriteMessage("\nSkipped {0} text(s) using SHX fonts ({1}). SHX fonts are single-stroke and have no outline; switch the text style to a TrueType font.",
-                    report.ShxSkipped, string.Join(", ", report.ShxFonts.ToArray()));
+            ed.WriteMessage("\nCreated {0} polyline(s) from {1} text line(s): {2} in TrueType fonts (closed outlines), {3} in SHX fonts (letter strokes).",
+                report.Polylines, report.Texts, report.Texts - report.ShxTexts, report.ShxTexts);
+            if (report.FontMissing > 0)
+                ed.WriteMessage("\nSkipped {0} text line(s): font file not found ({1}). Add its folder to OPTIONS > Files > Support File Search Path, or set FONTALT.",
+                    report.FontMissing, string.Join(", ", report.MissingFonts.ToArray()));
+            if (report.MissingGlyphs > 0)
+                ed.WriteMessage("\n{0} character(s) are not in their SHX font and were left out.", report.MissingGlyphs);
             if (report.Failed > 0)
                 ed.WriteMessage("\n{0} text(s) could not be converted: {1}", report.Failed, report.LastError);
             if (report.SizeWarnings > 0)
@@ -127,8 +140,8 @@ namespace TextOutline
 
     public class Report
     {
-        public int Texts, Polylines, ShxSkipped, Failed, SizeWarnings;
-        public List<string> ShxFonts = new List<string>();
+        public int Texts, ShxTexts, Polylines, FontMissing, MissingGlyphs, Failed, SizeWarnings;
+        public List<string> MissingFonts = new List<string>();
         public string LastError = "";
     }
 
@@ -148,10 +161,16 @@ namespace TextOutline
                 FontFamily family = ResolveFont(tsr, db, out style);
                 if (family == null)
                 {
-                    report.ShxSkipped++;
-                    string name = Path.GetFileName(tsr.FileName);
-                    if (!report.ShxFonts.Contains(name)) report.ShxFonts.Add(name);
-                    return false;
+                    // Not a TrueType font: use the style's SHX font and explode the letter strokes.
+                    string fontName;
+                    ShxFont shx = ResolveShx(tsr, db, out fontName);
+                    if (shx == null)
+                    {
+                        report.FontMissing++;
+                        if (!report.MissingFonts.Contains(fontName)) report.MissingFonts.Add(fontName);
+                        return false;
+                    }
+                    return ShxConverter.Convert(txt, str, shx, owner, space, tr, report);
                 }
 
                 // 1. Glyph outlines in font units
@@ -259,6 +278,114 @@ namespace TextOutline
             if (string.IsNullOrEmpty(path) || !File.Exists(path))
                 path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), Path.GetFileName(file));
             return GlyphOutline.FamilyFromFile(path);
+        }
+
+        // Finds and loads the style's SHX font the way AutoCAD does: support paths, Fonts folder, then FONTALT.
+        static ShxFont ResolveShx(TextStyleTableRecord tsr, Database db, out string fontName)
+        {
+            string file = tsr.FileName ?? "";
+            fontName = file.Length > 0 ? Path.GetFileName(file) : "(no font)";
+            string ext = Path.GetExtension(file).ToLowerInvariant();
+            if (ext == ".ttf" || ext == ".otf" || ext == ".ttc") return null;   // TrueType font that is not installed
+
+            List<string> names = new List<string>();
+            if (file.Length > 0) names.Add(ext.Length == 0 ? file + ".shx" : file);
+            try
+            {
+                string alt = AcApp.GetSystemVariable("FONTALT") as string;
+                if (!string.IsNullOrEmpty(alt) && alt != ".")
+                    names.Add(Path.GetExtension(alt).Length == 0 ? alt + ".shx" : alt);
+            }
+            catch (System.Exception) { }
+
+            foreach (string name in names)
+            {
+                string path = FindShx(name, db);
+                if (path == null) continue;
+                try { return ShxFont.Load(path); }
+                catch (System.Exception) { }   // big font or damaged file: try the next one
+            }
+            return null;
+        }
+
+        static string FindShx(string name, Database db)
+        {
+            if (File.Exists(name)) return name;
+            try
+            {
+                string path = HostApplicationServices.Current.FindFile(name, db, FindFileHint.CompiledShapeFile);
+                if (!string.IsNullOrEmpty(path) && File.Exists(path)) return path;
+            }
+            catch (Autodesk.AutoCAD.Runtime.Exception) { }
+            return null;
+        }
+    }
+
+    // Explodes text in an SHX font into polylines along the letter strokes.
+    static class ShxConverter
+    {
+        public static bool Convert(DBText txt, string str, ShxFont font, Entity owner,
+                                   BlockTableRecord space, Transaction tr, Report report)
+        {
+            double advance;
+            int missing;
+            List<ShxStroke> strokes = font.Render(str, out advance, out missing);
+            report.MissingGlyphs += missing;
+            if (strokes.Count == 0) return true;
+
+            // Shape units to drawing units: the font's "above" height becomes the text height.
+            double s = txt.Height / Math.Max(1, font.Above);
+            double wf = txt.WidthFactor > 0 ? txt.WidthFactor : 1;
+            double xs = s * wf, ys = s;
+            bool fit = txt.Justify == AttachmentPoint.BaseFit, align = txt.Justify == AttachmentPoint.BaseAlign;
+            if ((fit || align) && advance > 0)
+            {
+                // Fit stretches the text between its two points; Aligned scales it evenly.
+                double d = txt.Position.DistanceTo(txt.AlignmentPoint);
+                double natural = advance * xs;
+                if (d > 0 && natural > 0)
+                {
+                    double k = d / natural;
+                    xs *= k;
+                    if (align) ys *= k;
+                }
+            }
+            double tanObl = Math.Tan(txt.Oblique);
+            double mx = txt.IsMirroredInX ? -1 : 1, my = txt.IsMirroredInY ? -1 : 1;
+
+            // Arcs stay true arcs (bulges) unless the text is stretched or slanted, which makes them ellipses.
+            bool keepArcs = Math.Abs(xs - ys) <= 1e-9 * Math.Max(Math.Abs(xs), Math.Abs(ys)) && Math.Abs(tanObl) < 1e-12;
+            int perQuarter = GlyphOutline.Flatness >= 1f ? 4 : GlyphOutline.Flatness <= 0.05f ? 16 : 8;
+
+            Matrix3d toWorld = Matrix3d.Displacement(txt.Position.GetAsVector())
+                             * Matrix3d.PlaneToWorld(txt.Normal)
+                             * Matrix3d.Rotation(txt.Rotation, Vector3d.ZAxis, Point3d.Origin);
+
+            foreach (ShxStroke raw in strokes)
+            {
+                ShxStroke st = keepArcs ? raw : raw.Flatten(perQuarter);
+                bool closed = st.IsClosed;
+                int n = closed ? st.Count - 1 : st.Count;
+                if (n < 2) continue;
+
+                Polyline pl = new Polyline(n);
+                for (int i = 0; i < n; i++)
+                {
+                    double x = mx * ((st.X[i] * xs) + (st.Y[i] * ys * tanObl));
+                    double y = my * st.Y[i] * ys;
+                    double bulge = keepArcs ? st.Bulge[i] * mx * my : 0;
+                    pl.AddVertexAt(i, new Point2d(x, y), bulge, 0, 0);
+                }
+                pl.Closed = closed;
+                pl.TransformBy(toWorld);
+                pl.SetPropertiesFrom(owner);
+                space.AppendEntity(pl);
+                tr.AddNewlyCreatedDBObject(pl, true);
+                report.Polylines++;
+            }
+            report.Texts++;
+            report.ShxTexts++;
+            return true;
         }
     }
 
