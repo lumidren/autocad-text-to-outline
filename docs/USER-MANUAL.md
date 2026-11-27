@@ -1,7 +1,12 @@
-﻿# Text to Outline for AutoCAD 2020 — User Manual
+﻿# Text to Outline for AutoCAD — User Manual
 
-This plugin turns AutoCAD **TEXT** and **MTEXT** into **closed polylines that trace the outer edges of the letters**.
-It does in one command what you would otherwise do by hand:
+This plugin explodes AutoCAD **TEXT** and **MTEXT** into **polylines**, using each text's own **text style** and font:
+
+- **TrueType fonts** (Arial, Calibri…) become **closed polylines that trace the outer edges of the letters**.
+- **SHX fonts** (txt, romans, simplex, isocp…) are single-line fonts, so they become **polylines along the
+  letter strokes**: the same lines AutoCAD draws, with real arcs where the font has arcs.
+
+For TrueType text it does in one command what you would otherwise do by hand:
 
 | Manual way | What the plugin does |
 |---|---|
@@ -18,7 +23,7 @@ rotation, width factor, oblique (slant) angle, justification, and mirrored or up
 
 ![Exploded text vs. TX result](manual-vs-plugin.png)
 
-> **Quick reference:** `NETLOAD` the DLL once per session → type **`TX`** → select text → **Enter** →
+> **Quick reference:** `NETLOAD` the DLL once per session → type **`TX`** → select text (or nothing, for all text) → **Enter** →
 > answer *Delete original text? [Yes/No]*. Use `TXQUALITY` to change curve smoothness and `U` to undo.
 
 ---
@@ -42,10 +47,10 @@ rotation, width factor, oblique (slant) angle, justification, and mirrored or up
 
 ## 1. Requirements
 
-- **AutoCAD 2020** (64-bit, Windows). It should also work in AutoCAD 2021–2024, but it was built for 2020.
-  It does **not** load in AutoCAD LT (LT does not support plugins).
-- The file **`TextOutline.dll`**, found in the `bin` folder of this repository.
-- The fonts used by your text must be installed on the computer (the same fonts AutoCAD uses to display it).
+- **AutoCAD 2019 or newer** (64-bit, Windows), including AutoCAD 2020. There is one DLL per AutoCAD generation
+  (see section 2). It does **not** load in AutoCAD LT (LT does not support plugins).
+- The fonts used by your text: TrueType fonts installed in Windows, SHX fonts where AutoCAD finds them
+  (its `Fonts` folder or a support path). These are the same fonts AutoCAD uses to display the text.
 
 Express Tools are **not** needed.
 
@@ -53,11 +58,15 @@ Express Tools are **not** needed.
 
 ## 2. Installing the plugin
 
-**Download** the plugin first:
-- Direct download: <https://github.com/lumidren/autocad-text-to-outline/raw/main/bin/TextOutline.dll>
-- Or open [`bin/TextOutline.dll`](../bin/TextOutline.dll) on GitHub → **⬇ Download raw file** (top right).
-- Or the whole project: green **`<> Code`** button on the repository page → **Download ZIP**
-  (unblock the ZIP *before* extracting it, see step 3 below).
+**Download** the DLL for your AutoCAD version from the [latest release](https://github.com/lumidren/autocad-text-to-outline/releases/latest):
+
+| Your AutoCAD | File |
+|---|---|
+| 2019 – 2024 (including 2020) | [`TextOutline.dll`](https://github.com/lumidren/autocad-text-to-outline/releases/latest/download/TextOutline.dll) |
+| 2025 – 2026 | [`TextOutline-AutoCAD-2025-2026.dll`](https://github.com/lumidren/autocad-text-to-outline/releases/latest/download/TextOutline-AutoCAD-2025-2026.dll) |
+| 2027 and newer | [`TextOutline-AutoCAD-2027.dll`](https://github.com/lumidren/autocad-text-to-outline/releases/latest/download/TextOutline-AutoCAD-2027.dll) |
+
+This manual calls the file `TextOutline.dll`. If you downloaded one of the other two, use its name instead.
 
 If the browser warns that the `.dll` "isn't commonly downloaded", open its Downloads list (**Ctrl+J**)
 and choose **Keep** / **Keep anyway**.
@@ -84,7 +93,7 @@ Then install it:
 
 ## 3. Loading the plugin in AutoCAD
 
-1. Open AutoCAD 2020 and any drawing.
+1. Open AutoCAD and any drawing.
 2. Type **`NETLOAD`** and press **Enter**.
 3. Browse to `C:\AutoCAD Plugins\TextOutline\TextOutline.dll` and click **Open**.
 4. If a **Security – Unsigned Executable File** dialog appears, click **Load** (or **Always Load**).
@@ -122,12 +131,14 @@ Use the `acaddoc.lsp` file, which AutoCAD runs every time it opens a drawing.
 
 ## 5. Converting text to outlines (step by step)
 
-1. Make sure the text uses a **TrueType font** (see [section 9](#9-what-the-plugin-cannot-convert)).
-   In the **STYLE** dialog, TrueType fonts have a **TT** icon (Arial, Times New Roman, Calibri, Segoe Script…).
+1. Any text style works. `TX` reads each text's style and uses its font:
+   - A **TrueType** style (a **TT** icon in the **STYLE** dialog: Arial, Calibri, Segoe Script…) gives closed outlines.
+   - An **SHX** style (a compass icon: txt, romans, simplex, isocp…) gives polylines along the letter strokes.
 2. Type **`TEXTOUTLINE`** (or the short alias **`TX`**) and press **Enter**.
-3. **Select the text.** You can pick single TEXT and MTEXT objects, use a window, or type `ALL`.
-   Other object types are ignored automatically. Press **Enter** when done.
-   *(You can also select the text first and then type `TX`.)*
+3. **Select the text.** You can pick single TEXT and MTEXT objects or use a window. Other object types
+   are ignored automatically. Press **Enter** when done.
+   - To convert **all** text in the current space, press **Enter** without selecting anything.
+   - You can also select the text first and then type `TX`.
 4. The command asks:
    ```
    Delete original text? [Yes/No] <No>:
@@ -138,7 +149,7 @@ Use the `acaddoc.lsp` file, which AutoCAD runs every time it opens a drawing.
    Your answer becomes the default the next time.
 5. The command line reports the result, for example:
    ```
-   Created 24 outline polyline(s) from 3 text object(s).
+   Created 31 polyline(s) from 3 text line(s): 2 in TrueType fonts (closed outlines), 1 in SHX fonts (letter strokes).
    ```
 
 **Undo:** one **`U`** removes everything the command created and restores any deleted text.
@@ -146,10 +157,10 @@ Use the `acaddoc.lsp` file, which AutoCAD runs every time it opens a drawing.
 **The whole session on the command line:**
 ```
 Command: TX
-Select text to convert to outline polylines: Specify opposite corner: 3 found
-Select text to convert to outline polylines:
+Select text to convert to polylines [Enter = all text]: Specify opposite corner: 3 found
+Select text to convert to polylines [Enter = all text]:
 Delete original text? [Yes/No] <No>: Y
-Created 24 outline polyline(s) from 3 text object(s).
+Created 31 polyline(s) from 3 text line(s): 2 in TrueType fonts (closed outlines), 1 in SHX fonts (letter strokes).
 ```
 
 ### Example
@@ -157,7 +168,9 @@ Created 24 outline polyline(s) from 3 text object(s).
 1. Type `TEXT`, pick a point, height `50`, rotation `0`, type `Hello` and press Enter twice.
 2. Type `TX`, pick the text, press Enter, then press Enter again (keep the text).
 3. Move the text away (`MOVE`) to see the outlines underneath: 5 outer outlines (H, e, l, l, o)
-   and 2 hole outlines (inside e and o), each one a closed polyline.
+   and 2 hole outlines (inside e and o), each one a closed polyline. *(This is with a TrueType style such as Arial.)*
+4. Now set the current style to **Standard** (`txt.shx`) and repeat. This time you get one polyline per pen
+   stroke of each letter. The **o** is one closed polyline made of arcs.
 
 ---
 
@@ -165,7 +178,7 @@ Created 24 outline polyline(s) from 3 text object(s).
 
 | Command | What it does |
 |---|---|
-| **`TEXTOUTLINE`** | Converts selected TEXT/MTEXT into closed outline polylines. |
+| **`TEXTOUTLINE`** | Converts selected TEXT/MTEXT (or all of it: press Enter) into polylines using each text's style: outlines for TrueType, strokes for SHX. |
 | **`TX`** | Short alias for `TEXTOUTLINE`. |
 | **`TXQUALITY`** | Sets how smooth curved letters are: **Draft**, **Normal** (default) or **Fine**. |
 
@@ -181,6 +194,10 @@ Curved letter edges (o, s, c…) are made of many short straight segments.
 
 The setting lasts until AutoCAD is closed.
 
+SHX letters keep their arcs as true polyline arcs. Arcs are only split into straight segments when the text is
+stretched (width factor other than 1, or Fit) or slanted (oblique angle). Then **Draft**, **Normal** and **Fine**
+use 4, 8 and 16 segments per 90°.
+
 ---
 
 ## 7. What you get
@@ -195,6 +212,13 @@ The setting lasts until AutoCAD is closed.
 - They are drawn in the **same plane** as the text (works in any UCS and with rotated/3D text).
 - MTEXT with several lines or paragraphs: every line is converted.
 
+**SHX text** gives something different, because SHX letters are lines without thickness:
+
+- **One polyline per pen stroke.** An **L** in `txt.shx` is one open polyline, and an **O** is one closed polyline made of arcs.
+- The polylines lie **exactly on the lines AutoCAD draws** for that text: same font, height, width factor,
+  oblique angle, justification (Fit and Aligned too), rotation, mirroring and plane.
+- They take the text's layer, color, linetype and lineweight too.
+
 ---
 
 ## 8. Tips
@@ -205,9 +229,10 @@ The setting lasts until AutoCAD is closed.
   closed, which most CAM software requires.
 - **Offset outlines** (for a border or tool path): `OFFSET` works directly on the result polylines.
 - **Extruded 3D letters:** `EXTRUDE` the outer polylines, then `SUBTRACT` the extruded holes.
-- **Converting many texts at once:** type `TX`, then `ALL` at the selection prompt.
-- **Change the font first:** if your text uses an SHX font, change its text style to a TrueType font
-  (`STYLE` command), then run `TX`.
+- **Converting all text at once:** type `TX`, then press **Enter** without selecting anything.
+- **Outlines from SHX text:** SHX gives strokes, not outlines. To get closed outlines instead, change the text
+  style to a TrueType font (`STYLE` command), then run `TX`.
+- **Engraving or pen plotting:** an SHX style such as `romans.shx` gives single-line letters, one polyline per stroke.
 
 ---
 
@@ -215,7 +240,8 @@ The setting lasts until AutoCAD is closed.
 
 | Not supported | Why / what to do |
 |---|---|
-| **SHX fonts** (txt.shx, simplex.shx, romans.shx, isocp.shx…) | SHX letters are single lines with no thickness, so there is no outer edge to trace. Change the text style to a TrueType font first. The command lists the skipped SHX fonts on the command line. |
+| SHX **big fonts** (Asian double-byte `.shx`) | Characters found only in the big font are left out, and the command line counts them. Use a TrueType or unifont SHX style. |
+| SHX text as **closed outlines** | SHX letters are lines without thickness, so `TX` gives the strokes. For outlines, change the style to a TrueType font first. |
 | Text inside **blocks** | `EXPLODE` the block (or edit it with `BEDIT`/`REFEDIT`), then run `TX`. |
 | **Attributes**, dimension text, table text, leader text | Explode them to plain TEXT/MTEXT first (`BURST` from Express Tools converts attributes to text). |
 | Text that uses a font **not installed** on this computer | Install the font, or change the text style to an installed font. |
@@ -231,8 +257,9 @@ The setting lasts until AutoCAD is closed.
 | *"Unknown command TX"* | The plugin is not loaded in this AutoCAD session. Run `NETLOAD` again or set up auto-loading ([section 4](#4-loading-it-automatically-every-time-autocad-starts)). |
 | `TX` starts a different command | Another alias or plugin on this PC already uses `TX` (for example in `acad.pgp`). Use the full name **`TEXTOUTLINE`** instead. |
 | Security warning every time it loads | Add the plugin folder to **Trusted Locations** ([section 2](#2-installing-the-plugin), step 4). |
-| *"Skipped N text(s) using SHX fonts"* | That text uses a single-stroke SHX font. Change its style to a TrueType font. |
-| *"Created 0 outline polyline(s)"* | The selection contained only empty text, or only SHX text. |
+| *"Skipped N text line(s): font file not found (romans.shx)"* | AutoCAD can't find that SHX file either (it shows a substitute). Add the font's folder in **OPTIONS → Files → Support File Search Path**, or set `FONTALT` to a font you have. |
+| *"N character(s) are not in their SHX font"* | The font has no letter for those characters. Use a font that has them. |
+| *"Created 0 polyline(s)"* | The selection contained only empty text, or text whose font file was not found. |
 | *"…proportions differ from the text by more than 3%"* | The outline may not line up exactly with that text. Please report it with the font name, height and width factor (see below). |
 | Curves look faceted on very large text | `TXQUALITY` → `Fine`, then convert again. |
 | A different font shape than expected | AutoCAD shows a substitute when a font is missing. Install the real font so the outline matches. |
@@ -255,10 +282,17 @@ Outlines you already created are normal polylines and stay in your drawings.
 
 ## 12. Building the DLL yourself
 
-You only need this if you change the source code. No Visual Studio is required: the build uses the C#
-compiler that comes with Windows.
+You only need this if you change the source code. No Visual Studio is required.
 
-On a computer with AutoCAD 2020 installed, open a Command Prompt in the repository folder and run:
+**All three AutoCAD generations, without AutoCAD:** with the .NET 10 SDK, run this in the repository folder:
+```
+dotnet build TextOutline.csproj -c Release
+```
+The AutoCAD API comes from Autodesk's official `AutoCAD.NET` NuGet packages. The DLLs land in
+`bin\x64\Release\net48\` (2019-2024), `net8.0-windows\` (2025-2026) and `net10.0-windows\` (2027+).
+
+**AutoCAD 2019-2024 only, without any SDK:** this uses the C# compiler that comes with Windows. On a computer
+with AutoCAD installed, open a Command Prompt in the repository folder and run:
 ```
 build.bat
 ```
@@ -270,7 +304,8 @@ The new DLL is written to `bin\TextOutline.dll`.
 
 ### How it works (for developers)
 
-1. Each TEXT (and each line of an exploded MTEXT) is read with its text style's TrueType font, bold and italic settings.
+1. Each TEXT (and each line of an exploded MTEXT) is read with its text style's font, bold and italic settings.
+   SHX styles go to step 7, TrueType styles to steps 2-6.
 2. The letter outlines are read from the font with GDI+ (`GraphicsPath.AddString`) and curves are
    flattened to short line segments (`TXQUALITY`).
 3. Contours are classified as **solid** or **hole** from their winding direction. The largest
@@ -282,6 +317,14 @@ The new DLL is written to `bin\TextOutline.dll`.
 6. The loops are scaled and placed onto the text's real extents in the text's own coordinate system
    (handles height, width factor, oblique, rotation, justification, mirroring and the text plane),
    then written as closed `LWPOLYLINE`s.
+7. **SHX:** `src/ShxFont.cs` reads the compiled `.shx` file (classic shape fonts and unifont) and runs each
+   letter's shape codes: vectors, pen up/down, scale, push/pop, subshapes, displacements, octant, fractional
+   and bulge arcs. Every pen-down stroke becomes one `LWPOLYLINE` (arcs as bulges). The font's cap height is
+   scaled to the text height, then width factor, oblique, mirroring, Fit/Aligned, rotation and plane are applied.
+   The font file is found the way AutoCAD finds it: support paths, then `FONTALT`.
+
+`test\ShxTest.cs` checks step 7 without AutoCAD. It builds small `.shx` files byte by byte and checks the
+strokes of every shape code.
 
 `test\OutlineTest.cs` checks steps 2–4 without AutoCAD. It renders several fonts and compares the merged result
 with the font's own filled shape pixel by pixel.
