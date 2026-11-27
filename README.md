@@ -9,6 +9,11 @@
 - **SHX fonts** (txt, romans, simplex, isocp…): the letters are single lines, so `TX` explodes them into
   **polylines along the letter strokes**, with real arcs where the font has arcs. That's the same lines AutoCAD draws.
 
+**New: `TXSCAN` for text in point clouds.** Draw a window around text in a scan (painted markings, signs,
+engraved plates). `TXSCAN` reads the letters and finds the closest matching fonts among those AutoCAD can use.
+You pick one of the five best, and it draws the text as polylines exactly over the scan.
+[How to use it ↓](#text-in-point-clouds-txscan)
+
 ![Before and after TX](docs/before-after.png)
 
 ---
@@ -157,6 +162,7 @@ Created 31 polyline(s) from 3 text line(s): 2 in TrueType fonts (closed outlines
 | **`TX`** | Convert selected text (or all text: press Enter) to polylines, using each text's style (short name) |
 | **`TEXTOUTLINE`** | Same as `TX` (full name) |
 | **`TXQUALITY`** | Set how smooth curved letters are: **Draft**, **Normal** (default), **Fine** |
+| **`TXSCAN`** | Read text in a point cloud, identify its font, and draw it as polylines ([below](#text-in-point-clouds-txscan)) |
 
 ### `TXQUALITY` — curve smoothness
 
@@ -169,6 +175,42 @@ Curved edges (o, s, c…) of TrueType letters are made of many short straight se
 | **Fine** | 0.005 % of font size | Large signs, CNC / laser / plasma cutting |
 
 SHX arcs stay true arcs. They are only split into segments when the text is stretched (width factor, Fit) or slanted. Then **Draft**, **Normal** and **Fine** use 4, 8 and 16 segments per 90°.
+
+---
+
+## Text in point clouds: `TXSCAN`
+
+Use this for letters that exist only as scan points: road and floor markings, signs, painted labels,
+engraved or raised lettering on plates, stone or metal.
+
+![TXSCAN dialog on a simulated scan of engraved Times New Roman text](docs/txscan-dialog.png)
+
+1. **Show the letters clearly.** Look at the surface straight on (`PLAN`, or a view facing it). Turn perspective
+   off and zoom so the text fills a good part of the screen.
+   - **Painted text:** colour the point cloud by **intensity** or true colour, so the paint stands out.
+   - **Engraved or raised text:** colour it by **elevation** with a narrow range around the surface, so the
+     letters' depth shows as a different colour.
+2. Type **`TXSCAN`** and draw a window around **one line** of text. Leave a little space around it.
+3. `TXSCAN` grabs that window as shown on screen. It separates letter points from surface points, joins the
+   points into solid letters, and straightens the line. Windows' built-in text recognition then reads it,
+   with nothing to install.
+4. The dialog shows the letters it found and the text it read. **Correct the text if needed** and click
+   **Match fonts**.
+5. It compares the scan with **every font AutoCAD can use**: all TrueType fonts installed in Windows, and
+   every SHX font in AutoCAD's Fonts folder and support paths. The **five best** are listed with a score.
+   Click one to see it drawn over the scan: **black** = font and scan agree, **grey** = scan only,
+   **red** = font only.
+6. Click **Draw polylines**. `TXSCAN` creates a text style for that font and places text exactly over the
+   scanned letters: same box, direction and plane. It then explodes the text to polylines like `TX`:
+   closed outlines for TrueType, strokes for SHX. Tick **Keep the text object as well** to keep the TEXT too.
+
+Good to know:
+- **Only fonts on this PC can be found.** If the real font isn't installed, you get the closest look-alike.
+- Some fonts share the same letter shapes, so they score alike. For example, Verdana and MS Reference Sans
+  Serif, or Times New Roman and the Latin letters of Microsoft Himalaya.
+- One line at a time. Straight text on a flat surface works best. Curved text, or text seen at an angle, doesn't fit one font well.
+- Upside-down text is detected. It takes a few seconds to compare about 1,300 font styles.
+- If nothing is found, `TXSCAN` saves what it saw to `%TEMP%\TextOutline\` so you can check the colours.
 
 ---
 
@@ -221,6 +263,9 @@ SHX arcs stay true arcs. They are only split into segments when the text is stre
 | *"font file not found (romans.shx)"* | AutoCAD can't find that SHX file either. Add its folder in **OPTIONS → Files → Support File Search Path**, or set `FONTALT` to a font you have. |
 | *"N character(s) are not in their SHX font"* | The font has no letter for those characters (AutoCAD shows them as `?` or blank). Use a font that has them. |
 | Curves look jagged on big text | `TXQUALITY` → **Fine**, then convert again. |
+| `TXSCAN`: *"No letters found"* | Zoom in closer and change the point cloud colours so the letters stand out (intensity for paint, elevation for engraving). Look at the images saved in `%TEMP%\TextOutline\`. |
+| `TXSCAN`: *"Windows OCR could not read it"* | Type the text in the dialog yourself. Font matching still works. To have it read automatically, add a language with text recognition in Windows **Settings → Time & language → Language**. |
+| `TXSCAN` polylines are slightly off the scan | Use a window that holds only the text line, with no other markings, then try again. |
 | Outline doesn't sit exactly on the text, or a *"proportions differ"* message | Please [open an issue](../../issues) with the font name, height, width factor and a screenshot. |
 
 More detail: **[full user manual](docs/USER-MANUAL.md)**.
@@ -245,6 +290,22 @@ More detail: **[full user manual](docs/USER-MANUAL.md)**.
    Each pen-down stroke becomes one `LWPOLYLINE` with bulges for arcs. It is scaled so the font's cap height
    equals the text height, then gets the width factor, oblique angle, mirroring, Fit/Aligned stretch,
    rotation and plane. The font file is found like AutoCAD does it, through the support paths and then `FONTALT`.
+7. **`TXSCAN`** (`src/Scan*.cs`, `src/FontMatcher.cs`, `src/WindowsOcr.cs`):
+   - **Capture:** `GraphicsSystem.View.GetSnapshot` grabs the window as drawn. `WorldToDeviceMatrix` maps its
+     pixels back to the drawing.
+   - **Letter points:** the plain view background between points is the most common exact colour. Only real
+     points are split into letter and surface, using the median and spread of their values; the letters are
+     the clear outliers. Otsu's method fails here because letters are only a few percent of the points.
+     Each gap pixel then takes the class of its nearest point, and edges are smoothed by majority vote.
+   - **Clean-up and straightening:** pieces touching the window edge or outside the text band are dropped,
+     and the line is straightened by the sharpest row profile.
+   - **Reading:** Windows OCR, through Windows PowerShell 5.1, reads the text both ways up and keeps the better reading.
+   - **Font ranking:** each candidate font is drawn and lined up with the scan by the centre and spread of
+     its ink, then scored by overlap plus a distance score that tolerates thicker or thinner strokes.
+     A quick pass covers every font; the best 60 are redone at full size with and without slant; the top 12 get
+     a fine search over stretch and offset.
+   - **Output:** the chosen font becomes a text style. The text is fitted to the scanned box with AutoCAD's own
+     extents, then exploded by the `TX` code.
 
 ### Building
 **All versions, no AutoCAD needed** (needs the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)). The AutoCAD API comes from
@@ -269,6 +330,13 @@ The output is `bin\TextOutline.dll`.
 `test\ShxTest.cs` builds small `.shx` files byte by byte (classic and unifont) and checks the strokes that every
 shape code draws, including arcs, subshapes and flattening. CI runs it on every push.
 
+`test\ScanTest.cs` fakes point-cloud captures and runs them through the `TXSCAN` pipeline. Each fake is text in a
+known font, turned to an angle, broken into scattered points with intensity noise and stray points: painted
+light-on-dark, engraved dark-on-light, upside down, and a solid capture. It checks the straightening angle,
+the OCR text and that the right font ranks first. Locally, against all 1,280 installed font styles, the true font
+ranked in the top 3 in all four cases. Times New Roman tied with two fonts that copy its letters. CI runs the
+image part (`--no-ocr`).
+
 `test\OutlineTest.cs` renders several fonts and checks, pixel by pixel, that the merged outline matches the
 font's real shape ([result](docs/outline-test.png)). `test\MakeDocImages.cs` generates the pictures in `docs/`.
 
@@ -277,6 +345,12 @@ font's real shape ([result](docs/outline-test.png)). `test\MakeDocImages.cs` gen
 src/Commands.cs         AutoCAD commands, merging and polyline output
 src/GlyphOutline.cs     reads letter outlines from TrueType fonts
 src/ShxFont.cs          reads SHX fonts and draws their letter strokes
+src/ScanCommands.cs     TXSCAN: view capture, placement over the scan, text style
+src/ScanDialog.cs       TXSCAN dialog: text, top 5 fonts, overlay preview
+src/ScanImage.cs        letter image clean-up: point classification, gap fill, straightening
+src/ScanText.cs         scan pipeline: clean, straighten, read both ways up
+src/WindowsOcr.cs       Windows' built-in OCR through Windows PowerShell 5.1
+src/FontMatcher.cs      ranks fonts against the scanned letters
 test/                   geometry test and doc image generator
 docs/USER-MANUAL.md     full user manual
 TextOutline.csproj      builds all three AutoCAD versions
