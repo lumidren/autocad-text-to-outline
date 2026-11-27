@@ -571,6 +571,28 @@ namespace TextOutline
 
         public InkImage Dilate(int r) { return r > 0 ? Grow(r, true) : this; }
 
+        // Majority vote in each 3x3 block: smooths the ragged edges scan points leave without making
+        // strokes thicker or thinner (ragged edges would otherwise favour bolder fonts).
+        public InkImage Smooth(int passes)
+        {
+            InkImage cur = this;
+            for (int p = 0; p < passes; p++)
+            {
+                InkImage o = new InkImage(W, H);
+                for (int y = 0; y < H; y++)
+                    for (int x = 0; x < W; x++)
+                    {
+                        int n = 0;
+                        for (int dy = -1; dy <= 1; dy++)
+                            for (int dx = -1; dx <= 1; dx++)
+                                if (cur[x + dx, y + dy]) n++;
+                        o.P[(y * W) + x] = n >= 5;
+                    }
+                cur = o;
+            }
+            return cur;
+        }
+
         // Black letters on white with a margin, the way OCR engines like it.
         public Bitmap ToBitmap(int margin)
         {

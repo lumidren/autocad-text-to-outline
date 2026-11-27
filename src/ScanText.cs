@@ -44,7 +44,7 @@ namespace TextOutline
             r.PointMode = pointMode;
             if (pointMode)
             {
-                ink = ink.Close(1);                     // smooth the ragged edges the point fill leaves
+                ink = ink.Close(1).Smooth(2);           // smooth the ragged edges the point fill leaves
             }
             else
             {
