@@ -66,6 +66,7 @@ namespace TextOutline
         public double ObliqueDeg;       // slant applied on top of the font
         public double WidthFactor;      // horizontal stretch needed to fit the scan
         public InkImage Render;         // the text in this font, fitted to the scan
+        internal InkImage Source;       // the text in this font, cropped, before fitting
     }
 
     // Finds which fonts draw a given text most like the scanned letters.
@@ -82,50 +83,38 @@ namespace TextOutline
             if (sb.Width < 2 || sb.Height < 2) return all;
 
             InkImage s = scan.Crop(sb);
-            int h = WorkHeight, w = Math.Max(4, (int)Math.Round(h * s.W / (double)s.H));
-            InkImage target = s.Resize(w, h);
-            InkImage targetGrown = target.Dilate(1);
-            int[] targetDist = Distance(target);
             double strokeRatio = s.StrokeWidth() / s.H;     // stroke thickness relative to the text block height
+            string t = text.Trim();
 
+            // Pass 1: every font, small and upright, to find the plausible ones quickly.
+            Frame coarse = new Frame(s, CoarseHeight);
+            List<FontMatch> quick = new List<FontMatch>();
             foreach (FontCandidate f in fonts)
             {
+                FontMatch m = Try(f, t, 0, strokeRatio, CoarseEm, coarse);
+                if (m != null) quick.Add(m);
+            }
+            quick.Sort(ByScore);
+
+            // Pass 2: the shortlist at full size, upright and slanted.
+            Frame fine = new Frame(s, WorkHeight);
+            for (int i = 0; i < Math.Min(Shortlist, quick.Count); i++)
+            {
+                FontCandidate f = quick[i].Font;
                 foreach (double slant in Slants)
                 {
                     if (slant != 0 && !f.IsShx && (f.Style & FontStyle.Italic) != 0) continue;
-                    InkImage r;
-                    try { r = Draw(f, text.Trim(), slant, strokeRatio); }
-                    catch (Exception) { continue; }
-                    if (r == null) continue;
-                    Rectangle rb = r.InkBounds();
-                    if (rb.Width < 2 || rb.Height < 2) continue;
-                    InkImage rc = r.Crop(rb);
-
-                    // Line the render up with the scan by the centre and spread of their ink, which a
-                    // few stray scan pixels barely move (a bounding box would jump).
-                    double wf;
-                    InkImage fitted = FitByMoments(rc, target, out wf);
-                    if (fitted == null) continue;
-                    // Overlap tells bold from regular; the distance score tells shapes apart even when
-                    // the scan made strokes thicker or thinner than the font draws them.
-                    double score = (0.4 * Dice(target, targetGrown, fitted, fitted.Dilate(1)))
-                                 + (0.6 * Chamfer(target, targetDist, fitted, Distance(fitted)));
-                    // Real text is rarely stretched much: favour a width factor near 1.
-                    score *= 1 - (0.35 * Math.Min(1, Math.Abs(Math.Log(wf))));
-                    // Most text is upright: a slant has to win clearly.
-                    if (slant != 0) score *= 0.99;
-
-                    FontMatch m = new FontMatch();
-                    m.Font = f;
-                    m.Score = score;
-                    m.ObliqueDeg = slant;
-                    m.WidthFactor = wf;
-                    m.Render = fitted;
-                    all.Add(m);
+                    FontMatch m = Try(f, t, slant, strokeRatio, FineEm, fine);
+                    if (m != null) all.Add(m);
                 }
             }
+            all.Sort(ByScore);
 
-            all.Sort(delegate(FontMatch a, FontMatch b) { return b.Score.CompareTo(a.Score); });
+            // The quick fit lines shapes up by their ink centre and spread, which can be a few percent
+            // off. Fine-tune stretch and offset for the leaders, then rank again.
+            for (int i = 0; i < Math.Min(Refined, all.Count); i++) Refine(all[i], fine.Target, fine.Grown, fine.Dist);
+            all.Sort(ByScore);
+
             // One entry per font: keep its best slant.
             List<FontMatch> best = new List<FontMatch>();
             HashSet<string> seen = new HashSet<string>();
@@ -137,6 +126,103 @@ namespace TextOutline
                 if (best.Count >= top) break;
             }
             return best;
+        }
+
+        const int CoarseHeight = 44, Shortlist = 60, Refined = 12;
+        const float CoarseEm = 64f, FineEm = 120f;
+
+        static int ByScore(FontMatch a, FontMatch b) { return b.Score.CompareTo(a.Score); }
+
+        // The scan prepared for comparing at one height.
+        sealed class Frame
+        {
+            public readonly InkImage Target, Grown;
+            public readonly int[] Dist;
+
+            public Frame(InkImage scan, int h)
+            {
+                int w = Math.Max(4, (int)Math.Round(h * scan.W / (double)scan.H));
+                Target = scan.Resize(w, h);
+                Grown = Target.Dilate(1);
+                Dist = Distance(Target);
+            }
+        }
+
+        // Draws the text in one font and scores it against the scan, or returns null if it can't be drawn.
+        static FontMatch Try(FontCandidate f, string text, double slant, double strokeRatio, float em, Frame fr)
+        {
+            InkImage r;
+            try { r = Draw(f, text, slant, strokeRatio, em); }
+            catch (Exception) { return null; }
+            if (r == null) return null;
+            Rectangle rb = r.InkBounds();
+            if (rb.Width < 2 || rb.Height < 2) return null;
+            InkImage rc = r.Crop(rb);
+
+            // Line the render up with the scan by the centre and spread of their ink, which a few stray
+            // scan pixels barely move (a bounding box would jump).
+            double wf;
+            InkImage fitted = FitByMoments(rc, fr.Target, out wf);
+            if (fitted == null) return null;
+
+            FontMatch m = new FontMatch();
+            m.Font = f;
+            m.Score = Score(fr.Target, fr.Grown, fr.Dist, fitted, wf, slant);
+            m.ObliqueDeg = slant;
+            m.WidthFactor = wf;
+            m.Render = fitted;
+            m.Source = rc;
+            return m;
+        }
+
+        // Overlap tells bold from regular; the distance score tells shapes apart even when the scan made
+        // strokes thicker or thinner than the font draws them. Real text is rarely stretched much, and
+        // most of it is upright, so stretch and slant cost a little.
+        static double Score(InkImage target, InkImage targetGrown, int[] targetDist, InkImage fitted, double wf, double slant)
+        {
+            double score = (0.4 * Dice(target, targetGrown, fitted, fitted.Dilate(1)))
+                         + (0.6 * Chamfer(target, targetDist, fitted, Distance(fitted)));
+            score *= 1 - (0.35 * Math.Min(1, Math.Abs(Math.Log(wf))));
+            if (slant != 0) score *= 0.99;
+            return score;
+        }
+
+        // Coordinate search on horizontal and vertical stretch and offset, starting from the moment fit.
+        static void Refine(FontMatch m, InkImage target, InkImage targetGrown, int[] targetDist)
+        {
+            InkImage src = m.Source;
+            double rcx, rcy, rsx, rsy, tcx, tcy, tsx, tsy;
+            if (src == null || !Moments(src, out rcx, out rcy, out rsx, out rsy) || !Moments(target, out tcx, out tcy, out tsx, out tsy))
+                return;
+            double kx = tsx / rsx, ky = tsy / rsy;
+            double[] p = { kx, ky, tcx, tcy };
+            double[] step = { kx * 0.02, ky * 0.02, 1.0, 1.0 };
+            double best = m.Score;
+            InkImage bestImg = m.Render;
+            for (int round = 0; round < 2; round++)
+            {
+                bool improved = true;
+                for (int it = 0; it < 10 && improved; it++)
+                {
+                    improved = false;
+                    for (int k = 0; k < 4; k++)
+                        foreach (int sign in new int[] { 1, -1 })
+                        {
+                            double[] q = (double[])p.Clone();
+                            q[k] += sign * step[k];
+                            InkImage img = Place(src, target.W, target.H, rcx, rcy, q[2], q[3], q[0], q[1]);
+                            double sc = Score(target, targetGrown, targetDist, img, q[0] / q[1], m.ObliqueDeg);
+                            if (sc > best + 1e-6)
+                            {
+                                best = sc; bestImg = img; p = q; improved = true;
+                            }
+                        }
+                }
+                for (int k = 0; k < 4; k++) step[k] /= 2;
+            }
+            m.Score = best;
+            m.Render = bestImg;
+            m.WidthFactor = p[0] / p[1];
         }
 
         // Ranks the scan as it is and turned 180 degrees, and keeps the better way up (for when OCR could
@@ -180,7 +266,13 @@ namespace TextOutline
                 return null;
             double kx = tsx / rsx, ky = tsy / rsy;
             widthFactor = kx / ky;
-            InkImage o = new InkImage(target.W, target.H);
+            return Place(render, target.W, target.H, rcx, rcy, tcx, tcy, kx, ky);
+        }
+
+        // Draws the render into a w x h frame: render point (rcx, rcy) lands on (tcx, tcy), scaled kx, ky.
+        static InkImage Place(InkImage render, int w, int h, double rcx, double rcy, double tcx, double tcy, double kx, double ky)
+        {
+            InkImage o = new InkImage(w, h);
             for (int y = 0; y < o.H; y++)
             {
                 int ry = (int)Math.Floor(((y + 0.5 - tcy) / ky) + rcy);
@@ -257,11 +349,15 @@ namespace TextOutline
             return na + nb == 0 ? 0 : (hitA + hitB) / (double)(na + nb);
         }
 
-        // Draws the text in a font as ink, about 120 px tall, slanted by slantDeg.
+        // Draws the text in a font as ink, em pixels per em, slanted by slantDeg.
         // SHX strokes get a pen as thick (relative to the text height) as the scanned strokes.
         public static InkImage Draw(FontCandidate f, string text, double slantDeg, double strokeRatio)
         {
-            const float em = 120f;
+            return Draw(f, text, slantDeg, strokeRatio, FineEm);
+        }
+
+        public static InkImage Draw(FontCandidate f, string text, double slantDeg, double strokeRatio, float em)
+        {
             using (GraphicsPath path = new GraphicsPath(FillMode.Winding))
             {
                 float pen = 0;
@@ -284,12 +380,16 @@ namespace TextOutline
                 }
                 else
                 {
+                    // Lay the text out very large, then scale down: GDI+ rounds every letter's advance to whole
+                    // pixels at the layout size, and at 120 px that rounding visibly changes the spacing.
+                    const float layout = 2000f;
                     using (StringFormat fmt = (StringFormat)StringFormat.GenericTypographic.Clone())
                     {
                         fmt.FormatFlags |= StringFormatFlags.NoWrap;
-                        path.AddString(text, f.Family, (int)f.Style, em, new PointF(0, 0), fmt);
+                        path.AddString(text, f.Family, (int)f.Style, layout, new PointF(0, 0), fmt);
                     }
                     if (path.PointCount == 0) return null;
+                    using (Matrix down = new Matrix(em / layout, 0, 0, em / layout, 0, 0)) path.Transform(down);
                 }
 
                 if (slantDeg != 0)
