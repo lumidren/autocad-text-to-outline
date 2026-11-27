@@ -17,6 +17,6 @@ if not exist "%OUT%" mkdir "%OUT%"
 
 "%CSC%" /nologo /target:library /platform:x64 /optimize+ /out:"%OUT%\TextOutline.dll" ^
   /reference:"%ACAD%\AcDbMgd.dll" /reference:"%ACAD%\AcCoreMgd.dll" /reference:"%ACAD%\AcMgd.dll" ^
-  /reference:System.Drawing.dll ^
+  /reference:System.Drawing.dll /reference:System.Windows.Forms.dll ^
   "%~dp0src\*.cs"
 exit /b %ERRORLEVEL%
