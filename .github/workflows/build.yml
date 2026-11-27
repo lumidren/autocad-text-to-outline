@@ -26,6 +26,12 @@ jobs:
           "%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /warn:4 /platform:x64 /out:out\ShxTest.exe src\ShxFont.cs test\ShxTest.cs || exit /b 1
           out\ShxTest.exe
 
+      - name: Point-cloud scan tests (TXSCAN image side, OCR checked locally only)
+        shell: cmd
+        run: |
+          "%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /warn:4 /platform:x64 /optimize+ /reference:System.Drawing.dll /out:out\ScanTest.exe src\ShxFont.cs src\ScanImage.cs src\ScanText.cs src\WindowsOcr.cs src\FontMatcher.cs test\ScanTest.cs || exit /b 1
+          out\ScanTest.exe --no-ocr
+
       - name: Build plugin for AutoCAD 2019-2024, 2025-2026 and 2027+
         run: dotnet build TextOutline.csproj -c Release
 
